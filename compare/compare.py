@@ -2,7 +2,14 @@ import iso8601
 import datetime
 
 class CompareError(RuntimeError):
+    """Comparison error."""
     def __init__(self, msg, stack):
+        """Constructor.
+
+        Args:
+        msg -- message, '@' character will be replaced by key stack
+        stack -- list of keys to identify which element causes error
+        """
         st = ""
         if len(stack) > 0:
             st = " at "+"".join(stack)
@@ -11,42 +18,64 @@ class CompareError(RuntimeError):
     pass
 
 def compare(lhs, rhs, **kwargs):
-    if "hooks" not in kwargs:
-        kwargs["hooks"] = [ Default() ]
-    elif not isinstance(kwargs["hooks"],list):
-        kwargs["hooks"] = [ kwargs["hooks"] ]
+    """Compares @lhs with @rhs.
 
-    _internal_compare(lhs,rhs,[],kwargs["hooks"])
+    Keyword args:
+    hooks -- instance or iterable of instances of hooks
+    """
+
+    if "hooks" not in kwargs:
+        hooks = []
+    elif not isinstance(kwargs["hooks"],list):
+        hooks = [ kwargs["hooks"] ]
+
+    if len(hooks) == 0 or not isinstance(hooks[-1],Default):
+        hooks.append(Default())
+
+    # calling internal recursive comparison function with empty key stack
+    _internal_compare(lhs,rhs,[],hooks)
 
 def _internal_compare(lhs, rhs, stack, hooks):
+    """Compares @lhs with @rhs (recursive).
+
+    Args:
+    hooks -- instance or iterable of instances of hooks
+    """
     for hook in hooks:
         if hook.condition(lhs, rhs):
             hook.compare(lhs, rhs, stack, hooks)
             break
 
-# abstract class for hooks
 class Hook:
-    # checks whether hook should be executed
-    # if condiction is satisfied, execute() method will be called
+    """Abstract class for hooks."""
     def condition(self, lhs, rhs, stack):
+        """Determines whether hook should execute its comparison method."""
         raise NotImplementedError
 
-    # performs comparation between values
-    # this method should either accept values (consider them as equal)
-    # or raise an CompareError
     def compare(self, lhs, rhs, stack, hooks):
+        """Executes comparison. This method should raise CompareError if
+        two objects @lhs and @rhs are not considered equal."""
         raise NotImplementedError
 
-# default hook class which can also be subclassed
 class Default(Hook):
+    """Default hook class. Handles dict, list and basic types (int,str,float)."""
     def __init__(self, **kwargs):
+        """Constructor.
+
+        Keyword args:
+        match_order -- compare lists according to order of their elements
+        match_type -- consider objects equal, only if they have same type
+        """
         self.match_order = kwargs.get('match_order',True)
         self.match_type = kwargs.get('match_type',False)
 
     def condition(self, lhs, rhs):
+        """Whether default hook should be run. It always returns True, so
+        Default hook should be always the last of passed hooks."""
         return True
 
     def compare(self, lhs, rhs, stack, hooks):
+        """Performs comparison."""
         triggered = False
         for (cond, comp) in Default._internal_hooks:
             if cond(self,lhs,rhs):
@@ -55,22 +84,27 @@ class Default(Hook):
                 break
 
         if not triggered:
-            raise CompareError("unknown data type comprasion method@", stack)
+            raise CompareError("unknown data type comparison method@", stack)
 
     def _conddict(self, lhs, rhs):
+        """Returns whether two objects are both dictionaries."""
         return type(lhs) == dict and type(rhs) == dict
 
     def _condlist(self, lhs, rhs):
+        """Returns whether two objects are both lists."""
         return type(lhs) == list and type(rhs) == list
 
     def _condvalue(self, lhs, rhs):
+        """Returns whether two objects are neither both dicts nor lists."""
         #TODO change this condition
         return True
 
     def _condnone(self, lhs, rhs):
+        """Returns whether two objects are None."""
         return type(lhs) == type(None) and type(rhs) == type(None)
 
     def _compdict(self, lhs, rhs, stack, hooks):
+        """Perform comparison of two dicts."""
         rhskeys = list(rhs.keys())
         for k in lhs.keys():
             stack.append(".{}".format(k))
@@ -85,6 +119,7 @@ class Default(Hook):
             raise CompareError("value@ not found in lhs",stack)
 
     def _complist(self, lhs, rhs, stack, hooks):
+        """Perform comparison of two lists."""
         if len(lhs) != len(rhs):
             raise CompareError("lists@ have different lengths",stack)
 
@@ -112,6 +147,7 @@ class Default(Hook):
                 stack.pop()
 
     def _compvalue(self, lhs, rhs, stack, hooks):
+        """Perform comparison of two objects which are neither both dicts nor lists."""
         if self.match_type and type(lhs) != type(rhs):
             raise CompareError("data types@ differs",stack)
 
@@ -122,37 +158,13 @@ class Default(Hook):
             raise CompareError("values@ differs (not convertable)",stack)
 
     def _compnone(self, lhs, rhs, stack, hooks):
+        """Perform comparison of two None. Easy stuff :)."""
         return True
 
-    # static member
+    # internal hooks used in this hook. See compare() method.
     _internal_hooks = (
         (_conddict,  _compdict),
         (_condlist,  _complist),
         (_condnone,  _compnone),
         (_condvalue, _compvalue),
     )
-
-class ISO8601(Hook):
-    def __init__(self, **kwargs):
-        self.from_str = kwargs.get("from_str",True)
-        self.tolerance = datetime.timedelta(seconds=kwargs.get("tolerance",0.01))
-
-    def _getdatetime(self, o):
-        if isinstance(o, datetime.datetime):
-            return o
-        elif isinstance(o,str) and self.from_str:
-            try:
-                return iso8601.parse_date(o)
-            except iso8601.ParseError:
-                return None
-        return None
-
-    def condition(self, lhs, rhs):
-        #import pdb; pdb.set_trace()
-        self.lhs_dt = self._getdatetime(lhs)
-        self.rhs_dt = self._getdatetime(rhs)
-        return self.lhs_dt and self.rhs_dt
-
-    def compare(self, lhs, rhs, stack, hooks):
-        if abs(self.lhs_dt - self.rhs_dt) > self.tolerance:
-            raise CompareError("datetimes@ difference exceedes tolerance",stack)
