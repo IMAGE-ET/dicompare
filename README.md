@@ -16,9 +16,24 @@ I encountered problem with comparison of object from deserialization of JSON fro
 
 Consider two objects:
 ```python
-orm_obj = {'id': 66, 'name': 'Some long name 1', 'address_id': None, 'created': datetime.datetime(2017, 4, 26, 23, 5, 20, 409060, tzinfo=psycopg2.tz.FixedOffsetTimezone(offset=120, name=None))}
+orm_obj = {
+	'id': 66,
+	'name': 'Some long name 1',
+	'address_id': None,
+	'created': datetime.datetime(
+		2017, 4, 26,
+		23, 5, 20, 409060,
+		tzinfo=psycopg2.tz.FixedOffsetTimezone(
+			offset=120,
+			name=None))
+}
 
-api_obj = {'name': 'Some long name 1', 'id': 66, 'address_id': None, 'created': '2017-04-26T21:05:20.409Z'}
+api_obj = {
+	'id': 66,
+	'name': 'Some long name 1',
+	'address_id': None,
+	'created': '2017-04-26T21:05:20.409Z'
+}
 ```
 Their `created` fields are different. One is `datetime` type and the other one is `str`. If we have to test many API endpoints with resources like this (and with nested ones) it's better to involve some smart utility than altering all of this data by hand.
 
