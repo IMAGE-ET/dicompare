@@ -1,5 +1,6 @@
 from .compare import Hook
 import iso8601
+import datetime
 
 class ISO8601(Hook):
     """Hook for comparing datetimes. It can handle comprasion between:

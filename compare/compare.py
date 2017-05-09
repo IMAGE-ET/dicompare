@@ -155,7 +155,7 @@ class Default(Hook):
             if type(rhs)(lhs) != rhs or lhs != type(lhs)(rhs):
                 raise CompareError("values@ differs",stack)
         except (ValueError, TypeError):
-            raise CompareError("values@ differs (not convertable)",stack)
+            raise CompareError("values@ differs (not convertible)",stack)
 
     def _compnone(self, lhs, rhs, stack, hooks):
         """Perform comparison of two None. Easy stuff :)."""
